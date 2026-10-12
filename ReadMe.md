@@ -109,6 +109,25 @@ catch (NextcloudNotesException ex) when (
 
 ETag checking can be disabled with `useETag: false`. Do this only when overwriting intervening changes is intentional.
 
+Automatic handling of HTTP 412 conflicts is optional and disabled by default. Configure `NextcloudNotesClientOptions` when creating the client. `ServerFirst` returns the latest server version and discards the attempted local update; `ClientFirst` retries the local update using the current server ETag. `Ask` calls an application-provided asynchronous resolver with both versions, so the application can ask its user and return `ServerFirst` or `ClientFirst`:
+
+```csharp
+var options = new NextcloudNotesClientOptions
+{
+    ResolvePreconditionFailed = true,
+    ConflictResolutionStrategy = ConflictResolutionStrategy.Ask,
+    ConflictResolver = async (local, server, cancellationToken) =>
+    {
+        // Replace this with the application's UI or decision logic.
+        return await AskWhichVersionToKeepAsync(local, server, cancellationToken);
+    }
+};
+
+using var client = new NextcloudNotesClient(httpClient, options);
+```
+
+For a fixed strategy, set `ConflictResolutionStrategy` to `ServerFirst` or `ClientFirst` and omit `ConflictResolver`. If `Ask` is selected without a resolver, the client reports a configuration error after loading the current server version.
+
 ## Settings
 
 ```csharp

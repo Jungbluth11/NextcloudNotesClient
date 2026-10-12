@@ -14,20 +14,22 @@ public sealed class NextcloudNotesClient : IDisposable
 
     private readonly HttpClient _http;
     private readonly bool _ownsClient;
+    private readonly NextcloudNotesClientOptions _options;
 
-    public NextcloudNotesClient(string serverUrl, string username, string appPassword)
-        : this(CreateHttpClient(serverUrl, username, appPassword), true)
+    public NextcloudNotesClient(string serverUrl, string username, string appPassword, NextcloudNotesClientOptions? options = null)
+        : this(CreateHttpClient(serverUrl, username, appPassword), true, options)
     {
     }
 
-    public NextcloudNotesClient(HttpClient httpClient) : this(httpClient, false)
+    public NextcloudNotesClient(HttpClient httpClient, NextcloudNotesClientOptions? options = null) : this(httpClient, false, options)
     {
     }
 
-    private NextcloudNotesClient(HttpClient httpClient, bool ownsClient)
+    private NextcloudNotesClient(HttpClient httpClient, bool ownsClient, NextcloudNotesClientOptions? options)
     {
-        _http = httpClient;
+        _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _ownsClient = ownsClient;
+        _options = options ?? new NextcloudNotesClientOptions();
     }
 
     public void Dispose()
@@ -109,12 +111,46 @@ public sealed class NextcloudNotesClient : IDisposable
             Modified = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };
 
-        return SendAsync<NextcloudNote>(
+        return UpdateNoteCoreAsync(
+            note,
             HttpMethod.Put,
-            $"notes/{note.Id}",
             payload,
             cancellationToken,
             useETag ? note.ETag : null);
+    }
+
+    private async Task<NextcloudNote> UpdateNoteCoreAsync(NextcloudNote note, HttpMethod method, NotePayload payload,
+        CancellationToken cancellationToken, string? ifMatch)
+    {
+        try
+        {
+            return await SendAsync<NextcloudNote>(method, $"notes/{note.Id}", payload, cancellationToken, ifMatch)
+                .ConfigureAwait(false);
+        }
+        catch (NextcloudNotesException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed && _options.ResolvePreconditionFailed)
+        {
+            NextcloudNote serverNote = await GetNoteAsync(note.Id, cancellationToken).ConfigureAwait(false);
+            ConflictResolutionStrategy strategy = _options.ConflictResolutionStrategy;
+            if (strategy == ConflictResolutionStrategy.Ask)
+            {
+                if (_options.ConflictResolver is null)
+                    throw new InvalidOperationException("Ask conflict resolution requires a ConflictResolver callback.", ex);
+                strategy = await _options.ConflictResolver(note, serverNote, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (strategy == ConflictResolutionStrategy.ServerFirst)
+                return serverNote;
+            if (strategy == ConflictResolutionStrategy.ClientFirst)
+            {
+                if (serverNote.ReadOnly)
+                    throw new InvalidOperationException("The server version of this note is read-only.", ex);
+                note.ETag = serverNote.ETag;
+                return await SendAsync<NextcloudNote>(HttpMethod.Put, $"notes/{note.Id}", payload, cancellationToken, serverNote.ETag)
+                    .ConfigureAwait(false);
+            }
+
+            throw new InvalidOperationException("The conflict resolver must return ServerFirst or ClientFirst.", ex);
+        }
     }
 
     public Task<NextcloudNotesSettings> UpdateSettingsAsync(NextcloudNotesSettings settings, CancellationToken cancellationToken = default)
