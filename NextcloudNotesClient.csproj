@@ -10,7 +10,7 @@
     <PackageProjectUrl>https://github.com/Jungbluth11/NextcloudNotesClient</PackageProjectUrl>
     <Description>A small asynchronous .NET client for the Nextcloud Notes API.</Description>
     <RepositoryUrl>https://github.com/Jungbluth11/NextcloudNotesClient</RepositoryUrl>
-    <PackageTags>nextcloud notes http-client</PackageTags>
+    <PackageTags>nextcloud notes api client api-client api-wrapper http-client</PackageTags>
     <Version>1.1.0</Version>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
