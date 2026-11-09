@@ -1,14 +1,14 @@
 namespace Jungbluth11.NextcloudNotesClient;
 
-/// <summary>How to handle an HTTP 412 conflict while updating a note.</summary>
+/// <summary>Specifies how an HTTP 412 conflict during an update is handled.</summary>
 public enum ConflictResolutionStrategy
 {
-    /// <summary>Keep the current server version.</summary>
+    /// <summary>Keeps the current server version.</summary>
     ServerFirst,
 
-    /// <summary>Overwrite the current server version with the local version.</summary>
+    /// <summary>Overwrites the current server version with the local version.</summary>
     ClientFirst,
 
-    /// <summary>Ask the application to choose by using the configured resolver.</summary>
+    /// <summary>Delegates the choice to the application's configured resolver.</summary>
     Ask
 }

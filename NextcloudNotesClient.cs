@@ -1,10 +1,12 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
 namespace Jungbluth11.NextcloudNotesClient;
 
+/// <summary>Provides an asynchronous client for the Nextcloud Notes API.</summary>
+/// <remarks>The caller manages the lifetime of a supplied <see cref="HttpClient"/>.</remarks>
 public sealed class NextcloudNotesClient : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -16,11 +18,22 @@ public sealed class NextcloudNotesClient : IDisposable
     private readonly bool _ownsClient;
     private readonly NextcloudNotesClientOptions _options;
 
+    /// <summary>Creates a client and manages its <see cref="HttpClient"/> internally.</summary>
+    /// <param name="serverUrl">HTTPS URL of the Nextcloud instance, for example https://cloud.example.com.</param>
+    /// <param name="username">Nextcloud username.</param>
+    /// <param name="appPassword">User's app password.</param>
+    /// <param name="options">Optional conflict handling settings.</param>
+    /// <exception cref="ArgumentException">An argument is invalid, or the URL does not use HTTPS.</exception>
     public NextcloudNotesClient(string serverUrl, string username, string appPassword, NextcloudNotesClientOptions? options = null)
         : this(CreateHttpClient(serverUrl, username, appPassword), true, options)
     {
     }
 
+    /// <summary>Creates a client using an HTTP client configured by the caller.</summary>
+    /// <param name="httpClient">HTTP client with the base address and authentication for the Notes API.</param>
+    /// <param name="options">Optional conflict handling settings.</param>
+    /// <remarks>This client does not dispose the supplied HTTP client.</remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="httpClient"/> is <see langword="null"/>.</exception>
     public NextcloudNotesClient(HttpClient httpClient, NextcloudNotesClientOptions? options = null) : this(httpClient, false, options)
     {
     }
@@ -32,6 +45,7 @@ public sealed class NextcloudNotesClient : IDisposable
         _options = options ?? new NextcloudNotesClientOptions();
     }
 
+    /// <summary>Disposes resources created by this client.</summary>
     public void Dispose()
     {
         if (_ownsClient)
@@ -40,6 +54,12 @@ public sealed class NextcloudNotesClient : IDisposable
         }
     }
 
+    /// <summary>Creates a note.</summary>
+    /// <param name="title">Title of the note.</param><param name="content">Content of the note.</param>
+    /// <param name="category">Category; defaults to no category.</param><param name="favorite">Whether the note is a favorite.</param>
+    /// <param name="cancellationToken">Token to cancel the HTTP request.</param>
+    /// <returns>The note created by the server, including its server ID.</returns>
+    /// <exception cref="NextcloudNotesException">The API request failed.</exception>
     public Task<NextcloudNote> CreateNoteAsync(
         string title,
         string content,
@@ -56,6 +76,10 @@ public sealed class NextcloudNotesClient : IDisposable
         return SendAsync<NextcloudNote>(HttpMethod.Post, "notes", payload, cancellationToken);
     }
 
+    /// <summary>Deletes a note.</summary>
+    /// <param name="id">Positive note ID.</param><param name="cancellationToken">Token to cancel the request.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is not positive.</exception>
+    /// <exception cref="NextcloudNotesException">The API request failed.</exception>
     public Task DeleteNoteAsync(int id, CancellationToken cancellationToken = default)
     {
         ValidateId(id);
@@ -63,13 +87,21 @@ public sealed class NextcloudNotesClient : IDisposable
         return SendAsync(HttpMethod.Delete, $"notes/{id}", cancellationToken);
     }
 
+    /// <summary>Retrieves a single note by its ID.</summary>
+    /// <param name="id">Positive note ID.</param><param name="cancellationToken">Token to cancel the request.</param>
+    /// <returns>The requested note.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is not positive.</exception>
+    /// <exception cref="NextcloudNotesException">The API request failed.</exception>
     public Task<NextcloudNote> GetNoteAsync(int id, CancellationToken cancellationToken = default)
     {
         ValidateId(id);
-        
+
         return SendAsync<NextcloudNote>(HttpMethod.Get, $"notes/{id}", null, cancellationToken);
     }
 
+    /// <summary>Retrieves all notes or notes in a specific category.</summary>
+    /// <param name="category">Optional category to filter by.</param><param name="cancellationToken">Token to cancel the request.</param>
+    /// <returns>The matching notes.</returns><exception cref="NextcloudNotesException">The API request failed.</exception>
     public async Task<IReadOnlyList<NextcloudNote>> GetNotesAsync(string? category = null, CancellationToken cancellationToken = default)
     {
         string path = "notes";
@@ -83,12 +115,24 @@ public sealed class NextcloudNotesClient : IDisposable
             .ConfigureAwait(false);
     }
 
+    /// <summary>Retrieves the Notes settings for the current user.</summary>
+    /// <param name="cancellationToken">Token to cancel the request.</param><returns>The current settings.</returns>
+    /// <exception cref="NextcloudNotesException">The API request failed.</exception>
     public Task<NextcloudNotesSettings> GetSettingsAsync(
         CancellationToken cancellationToken = default)
     {
         return SendAsync<NextcloudNotesSettings>(HttpMethod.Get, "settings", null, cancellationToken);
     }
 
+    /// <summary>Updates an existing note.</summary>
+    /// <param name="note">Note containing the values to save.</param>
+    /// <param name="useETag">Uses the note's ETag by default to detect intervening changes.</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
+    /// <returns>The note returned by the server after the update.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="note"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The note ID is not positive.</exception>
+    /// <exception cref="InvalidOperationException">The note is read-only or the conflict configuration is invalid.</exception>
+    /// <exception cref="NextcloudNotesException">The API request failed; with ETag protection this may include an HTTP 412 conflict.</exception>
     public Task<NextcloudNote> UpdateNoteAsync(
         NextcloudNote note,
         bool useETag = true,
@@ -153,6 +197,11 @@ public sealed class NextcloudNotesClient : IDisposable
         }
     }
 
+    /// <summary>Saves the Notes settings.</summary>
+    /// <param name="settings">Settings to save.</param><param name="cancellationToken">Token to cancel the request.</param>
+    /// <returns>The settings returned by the server.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="settings"/> is <see langword="null"/>.</exception>
+    /// <exception cref="NextcloudNotesException">The API request failed.</exception>
     public Task<NextcloudNotesSettings> UpdateSettingsAsync(NextcloudNotesSettings settings, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -227,7 +276,16 @@ public sealed class NextcloudNotesClient : IDisposable
 
         if (!string.IsNullOrWhiteSpace(ifMatch))
         {
-            request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+            // Notes API returns the ETag field without HTTP entity-tag quotes,
+            // while its If-Match check expects the quoted HTTP syntax.
+            string entityTag = ifMatch.Trim();
+
+            if (entityTag.Length < 2 || entityTag[0] != '"' || entityTag[^1] != '"')
+            {
+                entityTag = $"\"{entityTag}\"";
+            }
+
+            request.Headers.TryAddWithoutValidation("If-Match", entityTag);
         }
 
         using HttpResponseMessage response = await _http.SendAsync(request,

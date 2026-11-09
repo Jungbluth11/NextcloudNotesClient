@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <RootNamespace>Jungbluth11.NextcloudNotesClient</RootNamespace>
     <Title>NextcloudNotesClient</Title>
     <PackageReadmeFile>ReadMe.md</PackageReadmeFile>
@@ -11,7 +12,7 @@
     <Description>A small asynchronous .NET client for the Nextcloud Notes API.</Description>
     <RepositoryUrl>https://github.com/Jungbluth11/NextcloudNotesClient</RepositoryUrl>
     <PackageTags>nextcloud notes api client api-client api-wrapper http-client</PackageTags>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
 
